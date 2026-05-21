@@ -163,6 +163,32 @@ loader.load(
 
     wizard.position.set(0, 0, 5);
 
+    //
+    // FIX MATERIALS
+    //
+
+    wizard.traverse(obj => {
+
+      if (!obj.isMesh) return;
+
+      const hasMat =
+        obj.material &&
+        !obj.material.transparent &&
+        obj.material.opacity > 0;
+
+      if (hasMat) {
+
+        obj.material.side = THREE.DoubleSide;
+
+      } else {
+
+        obj.material = new THREE.MeshLambertMaterial({
+          color: 0x9966cc,
+          side: THREE.DoubleSide
+        });
+      }
+    });
+
     scene.add(wizard);
 
     tryPlaceWizard();
@@ -264,7 +290,7 @@ function animate() {
 
       wizard.position.addScaledVector(
         right,
-        -speed
+        speed
       );
     }
 
@@ -272,7 +298,7 @@ function animate() {
 
       wizard.position.addScaledVector(
         right,
-        speed
+        -speed
       );
     }
 
