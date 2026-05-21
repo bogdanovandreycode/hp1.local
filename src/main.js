@@ -35,6 +35,10 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 
 renderer.setPixelRatio(1);
 
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+renderer.toneMapping = THREE.NoToneMapping;
+
 //
 // SCENE
 //
@@ -171,6 +175,14 @@ function tryPlaceBobs() {
         obj.material = obj.material.clone();
         obj.material.side = THREE.DoubleSide;
 
+        if (obj.material.map) {
+
+          obj.material.map.magFilter = THREE.NearestFilter;
+          obj.material.map.minFilter = THREE.NearestFilter;
+          obj.material.map.generateMipmaps = false;
+          obj.material.map.needsUpdate = true;
+        }
+
       } else {
 
         obj.material = new THREE.MeshLambertMaterial({
@@ -203,6 +215,27 @@ loader.load(
   (gltf) => {
 
     hall = gltf.scene;
+
+    //
+    // PS1 TEXTURES
+    //
+
+    hall.traverse(obj => {
+
+      if (!obj.isMesh) return;
+
+      const mat = obj.material;
+
+      mat.side = THREE.DoubleSide;
+
+      if (mat.map) {
+
+        mat.map.magFilter = THREE.NearestFilter;
+        mat.map.minFilter = THREE.NearestFilter;
+        mat.map.generateMipmaps = false;
+        mat.map.needsUpdate = true;
+      }
+    });
 
     scene.add(hall);
 
@@ -246,6 +279,14 @@ loader.load(
       if (hasMat) {
 
         obj.material.side = THREE.DoubleSide;
+
+        if (obj.material.map) {
+
+          obj.material.map.magFilter = THREE.NearestFilter;
+          obj.material.map.minFilter = THREE.NearestFilter;
+          obj.material.map.generateMipmaps = false;
+          obj.material.map.needsUpdate = true;
+        }
 
       } else {
 
