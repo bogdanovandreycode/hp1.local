@@ -97,6 +97,14 @@ let bobTemplate = null;
 const bobs = [];
 
 //
+// COLLIDERS
+//
+
+const colliders      = [];
+let   enterTrigger   = null;
+const enterTriggerBox = new THREE.Box3();
+
+//
 // FIND SPAWN
 //
 
@@ -239,6 +247,21 @@ loader.load(
 
     scene.add(hall);
 
+    //
+    // COLLIDERS + TRIGGERS
+    //
+
+    hall.traverse(obj => {
+
+      if (obj.name.startsWith("COLLISION_WALL")) {
+
+        //obj.visible = false;
+        colliders.push(new THREE.Box3().setFromObject(obj));
+      }
+    });
+
+    console.log(`colliders found: ${colliders.length}`);
+
     tryPlaceWizard();
 
     tryPlaceBobs();
@@ -379,8 +402,17 @@ let lastFrameTime = 0;
 let elapsed = 0;
 
 // cached vectors — avoid allocations every frame
-const _camOffset = new THREE.Vector3();
-const _camTarget = new THREE.Vector3();
+const _camOffset    = new THREE.Vector3();
+const _camTarget    = new THREE.Vector3();
+const _camDesired   = new THREE.Vector3();
+const _camEye       = new THREE.Vector3();
+const _camRayDir    = new THREE.Vector3();
+const _camRayHit    = new THREE.Vector3();
+const _camRay       = new THREE.Ray();
+const _playerBox    = new THREE.Box3();
+const _playerCenter = new THREE.Vector3();
+const _playerSize   = new THREE.Vector3(0.6, 1.8, 0.6);
+const _prevPos      = new THREE.Vector3();
 
 function animate(now) {
 
@@ -430,10 +462,43 @@ function animate(now) {
 
     if (dx !== 0 || dz !== 0) {
 
-      const len = Math.sqrt(dx * dx + dz * dz);
+      const len   = Math.sqrt(dx * dx + dz * dz);
+      const moveX = (dx / len) * speed * dt;
+      const moveZ = (dz / len) * speed * dt;
 
-      wizard.position.x += (dx / len) * speed * dt;
-      wizard.position.z += (dz / len) * speed * dt;
+      _prevPos.copy(wizard.position);
+
+      //
+      // SLIDE X
+      //
+
+      wizard.position.x += moveX;
+      _playerCenter.copy(wizard.position);
+      _playerCenter.y += 0.9;
+      _playerBox.setFromCenterAndSize(_playerCenter, _playerSize);
+
+      for (const box of colliders) {
+        if (_playerBox.intersectsBox(box)) {
+          wizard.position.x = _prevPos.x;
+          break;
+        }
+      }
+
+      //
+      // SLIDE Z
+      //
+
+      wizard.position.z += moveZ;
+      _playerCenter.copy(wizard.position);
+      _playerCenter.y += 0.9;
+      _playerBox.setFromCenterAndSize(_playerCenter, _playerSize);
+
+      for (const box of colliders) {
+        if (_playerBox.intersectsBox(box)) {
+          wizard.position.z = _prevPos.z;
+          break;
+        }
+      }
 
       const targetYaw = Math.atan2(dx, dz);
 
@@ -460,15 +525,67 @@ function animate(now) {
       Math.cos(yaw) * -4.5
     );
 
-    _camTarget.copy(wizard.position).add(_camOffset);
+    _camDesired.copy(wizard.position).add(_camOffset);
 
-    camera.position.lerp(_camTarget, 0.1 * dt);
+    //
+    // CAMERA OBSTRUCTION
+    //
+
+    _camEye.copy(wizard.position);
+    _camEye.y += 1.5;
+
+    _camRayDir
+      .subVectors(_camDesired, _camEye)
+      .normalize();
+
+    const camFullDist = _camEye.distanceTo(_camDesired);
+    let   camDist     = camFullDist;
+
+    _camRay.set(_camEye, _camRayDir);
+
+    for (const box of colliders) {
+
+      const hit = _camRay.intersectBox(box, _camRayHit);
+
+      if (hit) {
+        const d = _camEye.distanceTo(hit);
+        if (d > 0.1 && d < camDist) camDist = d;
+      }
+    }
+
+    if (camDist < camFullDist) {
+
+      _camTarget
+        .copy(_camEye)
+        .addScaledVector(_camRayDir, Math.max(0.5, camDist - 0.3));
+
+      camera.position.lerp(_camTarget, 0.3 * dt);
+
+    } else {
+
+      camera.position.lerp(_camDesired, 0.1 * dt);
+    }
 
     camera.lookAt(
       wizard.position.x,
       wizard.position.y + 1.5,
       wizard.position.z
     );
+  }
+
+  //
+  // ENTER_GAME TRIGGER
+  //
+
+  if (enterTrigger && wizard) {
+
+    _playerCenter.copy(wizard.position);
+    _playerCenter.y += 0.9;
+    _playerBox.setFromCenterAndSize(_playerCenter, _playerSize);
+
+    if (_playerBox.intersectsBox(enterTriggerBox)) {
+      console.log("ENTER GAME");
+    }
   }
 
   //
