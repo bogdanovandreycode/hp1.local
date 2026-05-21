@@ -374,9 +374,28 @@ document.addEventListener("mousemove", e => {
 // ANIMATION
 //
 
-function animate() {
+const FRAME_MS = 1000 / 60;
+let lastFrameTime = 0;
+let elapsed = 0;
+
+// cached vectors — avoid allocations every frame
+const _camOffset = new THREE.Vector3();
+const _camTarget = new THREE.Vector3();
+
+function animate(now) {
 
   requestAnimationFrame(animate);
+
+  // FPS cap: skip frame if not enough time has passed
+  const delta = now - lastFrameTime;
+  if (delta < FRAME_MS) return;
+
+  // accumulate time for bob levitation
+  elapsed += Math.min(delta, 50) * 0.001; // clamp spike to 50ms
+  lastFrameTime = now - (delta % FRAME_MS);
+
+  // normalized delta factor (1.0 = exactly 60fps)
+  const dt = Math.min(delta, 50) / (1000 / 60);
 
   if (wizard) {
 
@@ -413,8 +432,8 @@ function animate() {
 
       const len = Math.sqrt(dx * dx + dz * dz);
 
-      wizard.position.x += (dx / len) * speed;
-      wizard.position.z += (dz / len) * speed;
+      wizard.position.x += (dx / len) * speed * dt;
+      wizard.position.z += (dz / len) * speed * dt;
 
       const targetYaw = Math.atan2(dx, dz);
 
@@ -422,7 +441,7 @@ function animate() {
       while (diff >  Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
 
-      wizardYaw += diff * 0.15;
+      wizardYaw += diff * 0.15 * dt;
     }
 
     //
@@ -435,16 +454,15 @@ function animate() {
     // CAMERA
     //
 
-    const camOffset = new THREE.Vector3(
+    _camOffset.set(
       Math.sin(yaw) * -4.5,
       2.5,
       Math.cos(yaw) * -4.5
     );
 
-    camera.position.lerp(
-      wizard.position.clone().add(camOffset),
-      0.1
-    );
+    _camTarget.copy(wizard.position).add(_camOffset);
+
+    camera.position.lerp(_camTarget, 0.1 * dt);
 
     camera.lookAt(
       wizard.position.x,
@@ -457,18 +475,16 @@ function animate() {
   // BOB ANIMATION
   //
 
-  const t = Date.now() * 0.001;
-
   for (let i = bobs.length - 1; i >= 0; i--) {
 
     const bob = bobs[i];
 
     if (bob.collected) continue;
 
-    bob.mesh.rotation.y += 0.025;
+    bob.mesh.rotation.y += 0.025 * dt;
 
     bob.mesh.position.y =
-      bob.baseY + Math.sin(t * 1.8 + i * 1.2) * 0.15;
+      bob.baseY + Math.sin(elapsed * 1.8 + i * 1.2) * 0.15;
 
     if (wizard) {
 
@@ -495,7 +511,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-animate();
+animate(0);
 
 //
 // RESIZE
