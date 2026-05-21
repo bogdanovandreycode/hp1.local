@@ -12,7 +12,7 @@ document.body.innerHTML = `
     <canvas id="game"></canvas>
 
     <div class="hud">
-        PS1 Harry Potter Prototype
+        PS1 Harry Potter Prototype | Bobs: 0 / 3
     </div>
 `;
 
@@ -88,6 +88,9 @@ const loader = new GLTFLoader();
 
 let hall = null;
 let wizard = null;
+let bobTemplate = null;
+
+const bobs = [];
 
 //
 // FIND SPAWN
@@ -128,6 +131,68 @@ function tryPlaceWizard() {
 }
 
 //
+// PLACE BOBS
+//
+
+function tryPlaceBobs() {
+
+  if (!hall || !bobTemplate || bobs.length > 0) {
+    return;
+  }
+
+  for (let i = 1; i <= 3; i++) {
+
+    const spawn =
+      hall.getObjectByName(`SPAWN_BOB_${i}`);
+
+    if (!spawn) {
+      console.log(`SPAWN_BOB_${i} not found`);
+      continue;
+    }
+
+    const bob = bobTemplate.clone(true);
+
+    const worldPos = new THREE.Vector3();
+    spawn.getWorldPosition(worldPos);
+
+    bob.position.copy(worldPos);
+
+    bob.traverse(obj => {
+
+      if (!obj.isMesh) return;
+
+      const hasMat =
+        obj.material &&
+        !obj.material.transparent &&
+        obj.material.opacity > 0;
+
+      if (hasMat) {
+
+        obj.material = obj.material.clone();
+        obj.material.side = THREE.DoubleSide;
+
+      } else {
+
+        obj.material = new THREE.MeshLambertMaterial({
+          color: 0xffd700,
+          side: THREE.DoubleSide
+        });
+      }
+    });
+
+    scene.add(bob);
+
+    bobs.push({
+      mesh: bob,
+      baseY: worldPos.y,
+      collected: false
+    });
+
+    console.log(`SPAWN_BOB_${i} placed`);
+  }
+}
+
+//
 // LOAD HALL
 //
 
@@ -142,6 +207,8 @@ loader.load(
     scene.add(hall);
 
     tryPlaceWizard();
+
+    tryPlaceBobs();
 
     console.log("hall loaded");
   }
@@ -194,6 +261,24 @@ loader.load(
     tryPlaceWizard();
 
     console.log("wizard loaded");
+  }
+);
+
+//
+// LOAD BOB
+//
+
+loader.load(
+
+  "/Assets/Models/bob.glb",
+
+  (gltf) => {
+
+    bobTemplate = gltf.scene;
+
+    tryPlaceBobs();
+
+    console.log("bob loaded");
   }
 );
 
@@ -328,6 +413,45 @@ function animate() {
       wizard.position.y + 2,
       wizard.position.z
     );
+  }
+
+  //
+  // BOB ANIMATION
+  //
+
+  const t = Date.now() * 0.001;
+
+  for (let i = bobs.length - 1; i >= 0; i--) {
+
+    const bob = bobs[i];
+
+    if (bob.collected) continue;
+
+    bob.mesh.rotation.y += 0.025;
+
+    bob.mesh.position.y =
+      bob.baseY + Math.sin(t * 1.8 + i * 1.2) * 0.15;
+
+    if (wizard) {
+
+      const dist =
+        wizard.position.distanceTo(bob.mesh.position);
+
+      if (dist < 1.5) {
+
+        scene.remove(bob.mesh);
+
+        bob.collected = true;
+
+        const count =
+          bobs.filter(b => b.collected).length;
+
+        document.querySelector(".hud").textContent =
+          `PS1 Harry Potter Prototype | Bobs: ${count} / 3`;
+
+        console.log(`bob collected (${count}/3)`);
+      }
+    }
   }
 
   renderer.render(scene, camera);
