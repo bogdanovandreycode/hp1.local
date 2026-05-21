@@ -281,8 +281,6 @@ loader.load(
       }
 
       if (obj.name === "ENTER_GAME") {
-
-        obj.visible = false;
         enterTrigger = obj;
         enterTriggerBox.setFromObject(obj);
       }
@@ -443,6 +441,26 @@ const _playerSize      = new THREE.Vector3(0.6, 1.8, 0.6);
 const _playerSphere    = new THREE.Sphere();
 const _localSphere     = new THREE.Sphere();
 const _prevPos         = new THREE.Vector3();
+const _nextPos         = new THREE.Vector3();
+
+//
+// SPHERE TEST HELPER
+//
+
+function testSphere(pos) {
+
+  _playerCenter.copy(pos);
+  _playerCenter.y += 0.9;
+  _playerSphere.set(_playerCenter, 0.3);
+
+  for (const mesh of colliders) {
+    _localSphere.copy(_playerSphere);
+    mesh.worldToLocal(_localSphere.center);
+    if (mesh.geometry.boundsTree.intersectsSphere(_localSphere)) return true;
+  }
+
+  return false;
+}
 
 function animate(now) {
 
@@ -499,38 +517,34 @@ function animate(now) {
       _prevPos.copy(wizard.position);
 
       //
-      // SLIDE X
+      // COLLISION
       //
 
-      wizard.position.x += moveX;
-      _playerCenter.copy(wizard.position);
-      _playerCenter.y += 0.9;
-      _playerSphere.set(_playerCenter, 0.4);
+      // try full XZ movement first
+      _nextPos.copy(_prevPos);
+      _nextPos.x += moveX;
+      _nextPos.z += moveZ;
 
-      for (const mesh of colliders) {
-        _localSphere.copy(_playerSphere);
-        mesh.worldToLocal(_localSphere.center);
-        if (mesh.geometry.boundsTree.intersectsSphere(_localSphere)) {
-          wizard.position.x = _prevPos.x;
-          break;
+      if (!testSphere(_nextPos)) {
+
+        wizard.position.copy(_nextPos);
+
+      } else {
+
+        // slide along X
+        _nextPos.copy(_prevPos);
+        _nextPos.x += moveX;
+
+        if (!testSphere(_nextPos)) {
+          wizard.position.x = _nextPos.x;
         }
-      }
 
-      //
-      // SLIDE Z
-      //
+        // slide along Z
+        _nextPos.copy(_prevPos);
+        _nextPos.z += moveZ;
 
-      wizard.position.z += moveZ;
-      _playerCenter.copy(wizard.position);
-      _playerCenter.y += 0.9;
-      _playerSphere.set(_playerCenter, 0.4);
-
-      for (const mesh of colliders) {
-        _localSphere.copy(_playerSphere);
-        mesh.worldToLocal(_localSphere.center);
-        if (mesh.geometry.boundsTree.intersectsSphere(_localSphere)) {
-          wizard.position.z = _prevPos.z;
-          break;
+        if (!testSphere(_nextPos)) {
+          wizard.position.z = _nextPos.z;
         }
       }
 
