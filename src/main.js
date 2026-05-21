@@ -347,6 +347,8 @@ let yaw = 0;
 
 let pitch = -0.2;
 
+let wizardYaw = 0;
+
 document.body.addEventListener("click", () => {
 
   document.body.requestPointerLock();
@@ -380,78 +382,73 @@ function animate() {
 
     const speed = 0.06;
 
-    const forward = new THREE.Vector3(
-      Math.sin(yaw),
-      0,
-      Math.cos(yaw)
-    );
-
-    const right = new THREE.Vector3(
-      Math.cos(yaw),
-      0,
-      -Math.sin(yaw)
-    );
-
     //
-    // MOVE
+    // MOVE + ROTATE TOWARD MOVEMENT
     //
+
+    let dx = 0;
+    let dz = 0;
 
     if (keys["KeyW"]) {
-
-      wizard.position.addScaledVector(
-        forward,
-        speed
-      );
+      dx += Math.sin(yaw);
+      dz += Math.cos(yaw);
     }
 
     if (keys["KeyS"]) {
-
-      wizard.position.addScaledVector(
-        forward,
-        -speed
-      );
+      dx -= Math.sin(yaw);
+      dz -= Math.cos(yaw);
     }
 
     if (keys["KeyA"]) {
-
-      wizard.position.addScaledVector(
-        right,
-        speed
-      );
+      dx += Math.cos(yaw);
+      dz -= Math.sin(yaw);
     }
 
     if (keys["KeyD"]) {
+      dx -= Math.cos(yaw);
+      dz += Math.sin(yaw);
+    }
 
-      wizard.position.addScaledVector(
-        right,
-        -speed
-      );
+    if (dx !== 0 || dz !== 0) {
+
+      const len = Math.sqrt(dx * dx + dz * dz);
+
+      wizard.position.x += (dx / len) * speed;
+      wizard.position.z += (dz / len) * speed;
+
+      const targetYaw = Math.atan2(dx, dz);
+
+      let diff = targetYaw - wizardYaw;
+      while (diff >  Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+
+      wizardYaw += diff * 0.15;
     }
 
     //
     // ROTATE
     //
 
-    wizard.rotation.y = yaw;
+    wizard.rotation.y = wizardYaw;
 
     //
     // CAMERA
     //
 
     const camOffset = new THREE.Vector3(
-      Math.sin(yaw) * -7,
-      4,
-      Math.cos(yaw) * -7
+      Math.sin(yaw) * -4.5,
+      2.5,
+      Math.cos(yaw) * -4.5
     );
 
     camera.position.lerp(
       wizard.position.clone().add(camOffset),
-      0.08
+      0.1
     );
 
     camera.lookAt(
       wizard.position.x,
-      wizard.position.y + 2,
+      wizard.position.y + 1.5,
       wizard.position.z
     );
   }
