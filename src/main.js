@@ -4,6 +4,23 @@ import * as THREE from "three";
 
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+import {
+  MeshBVH,
+  acceleratedRaycast,
+  computeBoundsTree,
+  disposeBoundsTree
+} from "three-mesh-bvh";
+
+
+THREE.BufferGeometry.prototype.computeBoundsTree =
+  computeBoundsTree;
+
+THREE.BufferGeometry.prototype.disposeBoundsTree =
+  disposeBoundsTree;
+
+THREE.Mesh.prototype.raycast =
+  acceleratedRaycast;
+
 //
 // CREATE CANVAS
 //
@@ -247,6 +264,8 @@ loader.load(
 
     scene.add(hall);
 
+    hall.updateMatrixWorld(true);
+
     //
     // COLLIDERS + TRIGGERS
     //
@@ -255,8 +274,17 @@ loader.load(
 
       if (obj.name.startsWith("COLLISION_WALL")) {
 
-        //obj.visible = false;
-        colliders.push(new THREE.Box3().setFromObject(obj));
+        obj.visible = false;
+        obj.geometry.computeBoundsTree();
+
+        colliders.push(obj);
+      }
+
+      if (obj.name === "ENTER_GAME") {
+
+        obj.visible = false;
+        enterTrigger = obj;
+        enterTriggerBox.setFromObject(obj);
       }
     });
 
@@ -402,17 +430,19 @@ let lastFrameTime = 0;
 let elapsed = 0;
 
 // cached vectors — avoid allocations every frame
-const _camOffset    = new THREE.Vector3();
-const _camTarget    = new THREE.Vector3();
-const _camDesired   = new THREE.Vector3();
-const _camEye       = new THREE.Vector3();
-const _camRayDir    = new THREE.Vector3();
-const _camRayHit    = new THREE.Vector3();
-const _camRay       = new THREE.Ray();
-const _playerBox    = new THREE.Box3();
-const _playerCenter = new THREE.Vector3();
-const _playerSize   = new THREE.Vector3(0.6, 1.8, 0.6);
-const _prevPos      = new THREE.Vector3();
+const _camOffset       = new THREE.Vector3();
+const _camTarget       = new THREE.Vector3();
+const _camDesired      = new THREE.Vector3();
+const _camEye          = new THREE.Vector3();
+const _camRayDir       = new THREE.Vector3();
+const _camRaycaster    = new THREE.Raycaster();
+const _rayIntersects   = [];
+const _playerBox       = new THREE.Box3();
+const _playerCenter    = new THREE.Vector3();
+const _playerSize      = new THREE.Vector3(0.6, 1.8, 0.6);
+const _playerSphere    = new THREE.Sphere();
+const _localSphere     = new THREE.Sphere();
+const _prevPos         = new THREE.Vector3();
 
 function animate(now) {
 
@@ -475,10 +505,12 @@ function animate(now) {
       wizard.position.x += moveX;
       _playerCenter.copy(wizard.position);
       _playerCenter.y += 0.9;
-      _playerBox.setFromCenterAndSize(_playerCenter, _playerSize);
+      _playerSphere.set(_playerCenter, 0.4);
 
-      for (const box of colliders) {
-        if (_playerBox.intersectsBox(box)) {
+      for (const mesh of colliders) {
+        _localSphere.copy(_playerSphere);
+        mesh.worldToLocal(_localSphere.center);
+        if (mesh.geometry.boundsTree.intersectsSphere(_localSphere)) {
           wizard.position.x = _prevPos.x;
           break;
         }
@@ -491,10 +523,12 @@ function animate(now) {
       wizard.position.z += moveZ;
       _playerCenter.copy(wizard.position);
       _playerCenter.y += 0.9;
-      _playerBox.setFromCenterAndSize(_playerCenter, _playerSize);
+      _playerSphere.set(_playerCenter, 0.4);
 
-      for (const box of colliders) {
-        if (_playerBox.intersectsBox(box)) {
+      for (const mesh of colliders) {
+        _localSphere.copy(_playerSphere);
+        mesh.worldToLocal(_localSphere.center);
+        if (mesh.geometry.boundsTree.intersectsSphere(_localSphere)) {
           wizard.position.z = _prevPos.z;
           break;
         }
@@ -541,16 +575,14 @@ function animate(now) {
     const camFullDist = _camEye.distanceTo(_camDesired);
     let   camDist     = camFullDist;
 
-    _camRay.set(_camEye, _camRayDir);
+    _camRaycaster.set(_camEye, _camRayDir);
+    _camRaycaster.far = camFullDist;
 
-    for (const box of colliders) {
+    _rayIntersects.length = 0;
+    _camRaycaster.intersectObjects(colliders, false, _rayIntersects);
 
-      const hit = _camRay.intersectBox(box, _camRayHit);
-
-      if (hit) {
-        const d = _camEye.distanceTo(hit);
-        if (d > 0.1 && d < camDist) camDist = d;
-      }
+    if (_rayIntersects.length > 0 && _rayIntersects[0].distance > 0.1) {
+      camDist = _rayIntersects[0].distance;
     }
 
     if (camDist < camFullDist) {
